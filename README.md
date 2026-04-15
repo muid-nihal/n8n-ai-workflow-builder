@@ -29,7 +29,7 @@ The agent will read [SETUP.md](SETUP.md) and walk you through everything step by
 
 ```bash
 # Clone
-git clone https://github.com/yourusername/n8n-ai-workflow-builder.git
+git clone https://github.com/muid-nihal/n8n-ai-workflow-builder.git
 cd n8n-ai-workflow-builder
 
 # Install
