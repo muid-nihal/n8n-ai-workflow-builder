@@ -1,5 +1,5 @@
 {
-    "name": "n8n-ai-workflow-builder",
+    "name": "n8n-ai-builder",
     "version": "1.0.0",
     "description": "Build n8n workflows using natural language with any AI coding agent",
     "main": "n8n-manager.js",

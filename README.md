@@ -29,8 +29,8 @@ The agent will read [SETUP.md](SETUP.md) and walk you through everything step by
 
 ```bash
 # Clone
-git clone https://github.com/muid-nihal/n8n-ai-workflow-builder.git
-cd n8n-ai-workflow-builder
+git clone https://github.com/muid-nihal/n8n-ai-builder.git
+cd n8n-ai-builder
 
 # Install
 npm install
@@ -90,7 +90,7 @@ Workflow appears in n8n, ready to activate
 ## Project Structure
 
 ```
-n8n-ai-workflow-builder/
+n8n-ai-builder/
 ├── INSTRUCTIONS.md            # Canonical agent instructions (single source of truth)
 ├── CLAUDE.md                  # -> Claude Code reads this (auto-synced copy)
 ├── AGENTS.md                  # -> Codex reads this (auto-synced copy)

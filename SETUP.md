@@ -79,8 +79,8 @@ Guide them through:
 
 ```bash
 # Clone the repo
-git clone <REPO_URL> n8n-ai-workflow-builder
-cd n8n-ai-workflow-builder
+git clone <REPO_URL> n8n-ai-builder
+cd n8n-ai-builder
 
 # Install dependencies (just one package: dotenv)
 npm install
