@@ -56,13 +56,31 @@ If the n8n-mcp server is configured, you have direct access to:
 - **2,709 workflow templates** with metadata
 - Real-world examples and patterns
 
+**MCP Tools Available:**
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `search_nodes` | Find nodes by functionality | Discovering which node to use |
+| `get_node` | Detailed node documentation | Configuring a specific node — get exact parameters |
+| `search_templates` | Browse workflow templates | Finding similar workflows to learn patterns |
+| `get_template` | Retrieve specific template | Adapting a proven template |
+| `validate_workflow` | **Validate workflow JSON against n8n schema** | **MANDATORY before every push** — catches bad typeVersions, invalid parameters, broken connections, expression errors |
+| `n8n_autofix_workflow` | **Auto-fix common validation errors** | After validation fails — fixes typeVersion mismatches, expression format, connection issues |
+| `n8n_validate_workflow` | Validate an already-pushed workflow by ID | Post-push verification or auditing existing workflows |
+| `n8n_create_workflow` | Create workflow directly via API | Alternative to `npm run push` — API enforces schema |
+| `n8n_generate_workflow` | Generate workflow from natural language | When n8n's own engine can produce a better starting point than hand-crafting JSON |
+
 See `.mcp.json.example` for the configuration template.
 
 ---
 
 ## How to Create a Workflow
 
-Follow this process every time:
+### MANDATORY Process — Follow Every Time
+
+**Why this process exists:** Workflows built from an agent's training data or incomplete docs often break on import — wrong typeVersions, invalid parameters, broken canvas. The fix is to **validate against the real n8n instance before pushing**, using MCP tools.
+
+When the user asks you to create or modify a workflow, follow this process **without skipping steps**:
 
 ### 1. Understand Requirements
 
@@ -72,12 +90,13 @@ Ask clarifying questions if needed:
 - What transformations are needed?
 - Any specific n8n nodes to use?
 
-### 2. Research (Critical Step)
+### 2. Research (Critical — do not guess)
 
 **If you have MCP access:**
-1. Search for relevant nodes: `search_nodes({query: "gmail"})`
-2. Search for similar templates: `search_templates({query: "email automation"})`
-3. Get node documentation: `get_node({nodeType: "nodes-base.gmail"})`
+1. Search for nodes: `search_nodes` — get the exact node type name, not from memory
+2. Get node documentation: `get_node` — read FULL parameter schema for every node you'll use. Note the correct typeVersion, required fields, valid option values.
+3. Search for templates: `search_templates` — find similar workflows to copy proven patterns
+4. Pull existing working workflows: `npm run pull` — check typeVersions and parameter structures from workflows already running on the user's instance
 
 **If you don't have MCP access:**
 - Use the knowledge in this file and the skills directory
@@ -94,28 +113,72 @@ Plan before building:
 
 ### 4. Create the Workflow JSON
 
-Build the workflow file in `workflows/`. **For new workflows, do NOT include an `"id"` field** — the push script will assign one.
+Build the workflow file in `workflows/`:
+1. Create JSON structure with all nodes
+2. Configure node parameters using EXACT structures from step 2 — do NOT invent parameter names or option values. Copy from `get_node` docs or working workflows.
+3. Set up connections between nodes
+4. Add error handling
+5. Configure workflow settings
 
-### 5. Validate
+**For new workflows, do NOT include an `"id"` field** — the push script will assign one.
+
+### 5. Local Validation
 
 ```bash
 npm run validate workflows/new-workflow.json
 ```
 
-Fix any errors before pushing.
+Fix any structural errors before proceeding.
 
-### 6. Push to n8n
+### 6. MCP Validation — MANDATORY (if MCP available)
+
+Use the `validate_workflow` MCP tool with the full workflow JSON:
+- Profile: `"strict"`
+- validateNodes: `true`
+- validateConnections: `true`
+- validateExpressions: `true`
+
+This validates against n8n's actual node schemas — catches:
+- Wrong typeVersions
+- Invalid parameter values/options
+- Broken connections
+- Expression syntax errors
+- Missing required fields
+
+**DO NOT SKIP THIS STEP.** It is the primary defense against "works in your agent, breaks in n8n" failures.
+
+### 7. Auto-fix if Validation Fails
+
+If step 6 returns errors:
+1. Review each error — understand what's wrong
+2. Use `n8n_autofix_workflow` if the workflow is already pushed, or manually fix the JSON based on error messages
+3. Re-validate until clean
+
+Common auto-fixable issues:
+- typeVersion mismatches (auto-corrected to instance version)
+- Expression format errors (auto-corrected)
+- Connection structure issues (auto-corrected)
+
+### 8. Push to n8n
 
 ```bash
 npm run push workflows/new-workflow.json
 ```
 
-The script will:
+Alternative: use `n8n_create_workflow` MCP tool for direct API creation with schema enforcement.
+
+The push script will:
 - Create the workflow on n8n (POST)
 - Write the assigned ID back into the JSON file
 - Rename the file to include the workflow ID
 
-### 7. Commit
+### 9. Post-Push Verification
+
+After push, verify the workflow loaded correctly:
+- Use `n8n_validate_workflow` (by ID) to confirm instance-side validity
+- Ask the user to check the canvas if this is a complex workflow
+
+### 10. Commit
 
 ```bash
 git add workflows/
@@ -154,47 +217,37 @@ git commit -m "Add workflow: description"
 
 ## Critical Knowledge
 
-### Node typeVersions
+### typeVersions — ALWAYS Verify Dynamically
 
-**Always check the user's n8n instance for correct typeVersions** before creating workflows. Wrong versions cause "Could not find property option" errors on import.
+**DO NOT rely on a static table.** n8n updates change typeVersions. Always verify at workflow creation time using these methods (in priority order):
 
-**How to check:** Pull an existing workflow and look at the `typeVersion` fields:
+#### Method 1: MCP Validation (preferred)
+Use `validate_workflow` with `strict` profile — it will flag any wrong typeVersion and tell you the correct one. Then use `n8n_autofix_workflow` to auto-correct.
+
+#### Method 2: Check existing workflows on the instance
 ```bash
 npm run pull
-# Then examine any workflow JSON in workflows/
+# Then grep for the node type to see what version is actually in use:
+grep -A2 '"type": "n8n-nodes-base.httpRequest"' workflows/*.json | grep typeVersion
 ```
 
-**Common typeVersions (may vary by n8n version):**
+#### Method 3: MCP node documentation
+Use `get_node` to check the node's available versions.
 
-| Node Type | Typical typeVersion |
-|-----------|---------------------|
-| `n8n-nodes-base.httpRequest` | 4.1 or 4.2 |
-| `n8n-nodes-base.set` | 3.4 |
-| `n8n-nodes-base.if` | 2.2 or 2.3 |
-| `n8n-nodes-base.code` | 2 |
-| `n8n-nodes-base.merge` | 3 or 3.2 |
-| `n8n-nodes-base.switch` | 3.2 or 3.4 |
-| `n8n-nodes-base.webhook` | 2 or 2.1 |
-| `n8n-nodes-base.manualTrigger` | 1 |
-| `n8n-nodes-base.scheduleTrigger` | 1.1 |
-| `n8n-nodes-base.googleSheets` | 4.5 or 4.7 |
-| `n8n-nodes-base.gmail` | 2.1 |
-| `n8n-nodes-base.splitInBatches` | 3 |
-
-**Always verify against the user's actual instance. Do not guess.**
+**Why not a static table?** A hardcoded table goes stale the moment n8n updates. The three methods above always give you the truth from the actual instance.
 
 ### Read-Only Fields (Never Include When Pushing)
 
 These fields cause API push errors:
 - `updatedAt`, `createdAt`
-- `active` (handled separately by the push script)
+- `active` (read-only on PUT — `n8n-manager.js` calls `POST /workflows/{id}/deactivate` before PUT if the workflow is active, then warns you to re-activate from UI)
 - `isArchived`
 - `versionId`, `activeVersionId`, `versionCounter`
 - `triggerCount`
 - `shared`, `tags`
 - `activeVersion`, `staticData`, `meta`, `pinData`
 
-The `n8n-manager.js` push script strips these automatically.
+The `n8n-manager.js` push script strips these automatically. If crafting raw API calls manually, omit them.
 
 ### SplitInBatches (Loop Over Items) — Output Indices
 
@@ -291,7 +344,7 @@ const email = $input.first().json.email;
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| "Could not find property option" | Wrong typeVersion | Check user's n8n instance for correct versions |
+| "Could not find property option" | Wrong typeVersion | Use `validate_workflow` (MCP) to detect, `n8n_autofix_workflow` to fix |
 | Broken/missing node on canvas | Sub-node used standalone | Use HTTP Request node instead |
 | API push rejected (400) | Read-only fields in JSON | The push script handles this, but avoid them in manual calls |
 | Blank canvas after push | Structure mismatches | Try manual import: n8n UI > Menu > Import from File |
@@ -385,12 +438,17 @@ Key rules:
 
 Before considering a workflow complete:
 
-- [ ] Workflow researched (MCP search or docs review)
-- [ ] All nodes properly configured with correct typeVersions
+- [ ] Nodes researched using MCP (`search_nodes` + `get_node` for each node type)
+- [ ] Similar templates reviewed (`search_templates`)
+- [ ] typeVersions verified against instance (grep existing workflows or MCP validation)
+- [ ] Node parameters copied from docs/working workflows, NOT guessed
 - [ ] Connections are correct
 - [ ] Error handling included
-- [ ] Validation passes (`npm run validate`)
+- [ ] Local validation passes (`npm run validate`)
+- [ ] **MCP validation passes (`validate_workflow` with `strict` profile)** — most important step
+- [ ] Auto-fix applied if MCP validation found issues (`n8n_autofix_workflow`)
 - [ ] Pushed to n8n (`npm run push`)
+- [ ] Post-push verification done (`n8n_validate_workflow` by ID)
 - [ ] File renamed with workflow ID
 - [ ] Committed to git
 
@@ -399,17 +457,24 @@ Before considering a workflow complete:
 ## Common Pitfalls
 
 ### Don't
+- **EVER skip MCP validation (`validate_workflow`)** — the #1 cause of broken workflows
+- **Guess node parameters from training data** — always use `get_node` MCP docs or copy from working workflows
+- **Rely on a static typeVersion table** — always verify dynamically
 - Create workflows without researching nodes first
 - Skip validation before pushing
 - Hardcode credentials in workflows
 - Include `id` field for new workflows (let the push script handle it)
-- Guess node parameter structures — verify from docs or existing workflows
-- Use wrong typeVersions — always check the user's instance
 - Use sub-nodes as standalone nodes
+- Invent parameter options — verify they exist in the node version
 
 ### Do
-- Always start with research (MCP search or docs)
-- Validate locally before pushing
+- **Run `validate_workflow` (MCP, strict profile) before EVERY push** — non-negotiable
+- **Use `n8n_autofix_workflow` when validation fails** — auto-corrects typeVersions, expressions, connections
+- **Use `get_node` to read full parameter schema** for every node you configure
+- **Run `n8n_validate_workflow` (by ID) after push** to confirm instance-side validity
+- Always start with MCP research (`search_nodes` + `get_node`)
+- Pull existing workflows and grep for node types to see real configs
+- Validate locally (`npm run validate`) AND via MCP before pushing
 - Use environment variables for credentials
 - Follow naming conventions
 - Pull existing workflows to learn patterns
@@ -429,6 +494,8 @@ Before considering a workflow complete:
 
 ## Process Summary
 
-**Your workflow: Research > Design > Create > Validate > Push > Commit**
+**Your workflow: Research > Design > Create > Local Validate > MCP Validate (strict) > Autofix > Push > Verify > Commit**
 
-When a user asks you to build a workflow, follow this loop. Be thorough in research, precise in configuration, and always validate before pushing.
+**Your #1 Rule:** Never push a workflow without passing `validate_workflow` (MCP, strict profile). This single step prevents most failures.
+
+**When in doubt:** Pull a working workflow that uses the same node and copy its exact structure. Don't guess.
